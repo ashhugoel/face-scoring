@@ -30,13 +30,10 @@ app.post("/", authMiddleware, async (req, res) => {
 }) 
 
 
-export const handler = serverless(app);
-export default handler;
+// export const handler = serverless(app);
+// export default handler;
 
 
-// app.listen(process.env.PORT, () => {
-//   console.log(`Server running on port ${process.env.PORT}`);
-// });
-
-
-
+app.listen(process.env.PORT, () => {
+  console.log(`Server running on port ${process.env.PORT}`);
+});
