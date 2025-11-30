@@ -1,1 +1,0 @@
-{"version":3,"file":"jawline.js","sourceRoot":"","sources":["../../../src/engine/calculations/jawline.ts"],"names":[],"mappings":"AAEA,MAAM,UAAU,YAAY,CAAC,CAAoB;IAC7C,OAAO,IAAI,CAAC,KAAK,CACf,IAAI,GAAG,CAAC,CAAC,GAAG;QACZ,IAAI,GAAG,CAAC,CAAC,IAAI;QACb,IAAI,GAAG,CAAC,CAAC,IAAI;QACb,IAAI,GAAG,CAAC,CAAC,OAAO,CACjB,CAAC;AACJ,CAAC"}
