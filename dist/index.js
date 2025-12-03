@@ -17,7 +17,7 @@ const dotenv_1 = __importDefault(require("dotenv"));
 const authentication_js_1 = require("./middleware/authentication.js");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const ratelimiter_js_1 = require("./middleware/ratelimiter.js");
-const openai_client_js_1 = require("./utils/openai.client.js");
+const geometry3dScores_js_1 = require("./utils/geometry3dScores.js");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 app.use(ratelimiter_js_1.rateLimiter);
@@ -29,7 +29,8 @@ app.get("/jwt", (_, res) => {
     res.json({ jwt: token });
 });
 app.post("/", authentication_js_1.authMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const result = yield (0, openai_client_js_1.modelRun)(req.body.landmarks);
+    // const result = await modelRun(req.body.landmarks)
+    const result = (0, geometry3dScores_js_1.computeGeometry3DScores)(req.body.landmarks);
     res.json(result);
 }));
 // export const handler = serverless(app);
