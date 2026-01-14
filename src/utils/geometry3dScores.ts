@@ -20,8 +20,8 @@ export interface GeometryScores {
     mouth: number;
     chin: number;
     tilt: number;
-  } ; 
-  fullrating : {
+  };
+  fullrating: {
     jaw: number;
     eyes: number;
     nose: number;
@@ -31,7 +31,15 @@ export interface GeometryScores {
     midface: number;
     attractiveness100: number;
     attractiveness10: number;
+  };
 }
+
+export interface LandmarkInput {
+  landmarks: Array<{
+    x: number;
+    y: number;
+    z: number;
+  }>;
 }
 
 // 3D Euclidean distance
@@ -55,44 +63,99 @@ const ASYM = (
   A: number[],
   B: number[]
 ): number => {
+  if (A.length === 0 || B.length === 0) {
+    return 0;
+  }
+
   let sum = 0;
   let count = 0;
 
   for (const i of A) {
     for (const j of B) {
-      const di = D(pts[i], pts[1]);
-      const dj = D(pts[j], pts[1]);
-      sum += Math.abs(di - dj);
-      count++;
+      if (i < pts.length && j < pts.length && i >= 0 && j >= 0) {
+        const di = D(pts[i], pts[1]);
+        const dj = D(pts[j], pts[1]);
+        sum += Math.abs(di - dj);
+        count++;
+      }
     }
   }
-  return sum / count;
+
+  return count > 0 ? sum / count : 0;
 };
 
+/**
+ * Parses landmark input from JSON format to Landmark type
+ */
+export function parseLandmarks(input: LandmarkInput | Landmark): Landmark {
+  // If it's already a Landmark array, return as is
+  if (Array.isArray(input)) {
+    return input;
+  }
+
+  // If it's an object with landmarks property, extract it
+  if (input && typeof input === 'object' && 'landmarks' in input) {
+    return input.landmarks as Landmark;
+  }
+
+  throw new Error("Invalid landmark input format. Expected { landmarks: [...] } or Landmark array");
+}
+
+/**
+ * Computes 3D geometry scores from facial landmarks
+ */
 export function computeGeometry3DScores(
   pts: Landmark
 ): GeometryScores {
-
-  console.log(pts)
-  if (pts.length < 468)
+  if (!pts || pts.length < 468) {
     throw new Error("468 FaceMesh landmarks required");
+  }
 
-  // Compute M (max 3D distance)
+  // Validate landmark structure
+  for (let i = 0; i < Math.min(pts.length, 468); i++) {
+    if (typeof pts[i]?.x !== 'number' || typeof pts[i]?.y !== 'number' || typeof pts[i]?.z !== 'number') {
+      throw new Error(`Invalid landmark at index ${i}. Expected {x, y, z} object`);
+    }
+  }
+
+  /* --------------------------------------------------
+   * Global scale (still used for asymmetry-based metrics)
+   * -------------------------------------------------- */
   let M = 0;
   for (let i = 0; i < pts.length; i++) {
-    for (let j = 0; j < pts.length; j++) {
+    for (let j = i + 1; j < pts.length; j++) {
       const dist = D(pts[i], pts[j]);
       if (dist > M) M = dist;
     }
   }
 
+  // Prevent division by zero
+  if (M === 0) {
+    M = 1;
+  }
+
+  /* --------------------------------------------------
+   * Local facial reference scales
+   * -------------------------------------------------- */
+  // Validate critical landmark indices exist
+  const requiredIndices = [1, 4, 10, 13, 14, 27, 33, 50, 61, 70, 94, 133, 152, 159, 197, 205, 234, 257, 263, 280, 291, 336, 360, 362, 386, 425, 454, 467];
+  for (const idx of requiredIndices) {
+    if (idx >= pts.length) {
+      throw new Error(`Required landmark index ${idx} is out of bounds. Only ${pts.length} landmarks provided.`);
+    }
+  }
+
+  const FACE_HEIGHT = D(pts[10], pts[152]);     // forehead → chin
+  const FACE_WIDTH = D(pts[234], pts[454]);   // cheek → cheek
+  const MOUTH_WIDTH = D(pts[61], pts[291]);
+  const LIP_OPEN = D(pts[13], pts[14]);
+
+  /* --------------------------------------------------
+   * Metrics (unchanged ones stay unchanged)
+   * -------------------------------------------------- */
+
   const jaw =
     100 * (1 - ASYM(pts, range(234, 253), range(454, 467)) / M);
-
-  const lips =
-    100 * (1 - D(pts[61], pts[291]) / M);
-
-  const smile = lips;
 
   const brow =
     100 * (1 - ASYM(pts, range(70, 94), range(336, 360)) / M);
@@ -108,25 +171,6 @@ export function computeGeometry3DScores(
         D(pts[1], pts[197])
       ) / M
     );
-
-  const mouth = lips;
-
-  const chin =
-    100 * (1 - Math.abs(D(pts[152], pts[7])) / M);
-
-  const tilt =
-    100 * (1 - Math.abs(angle(pts[33], pts[263])) / Math.PI);
-
-  const thirds =
-    100 * (
-      1 -
-      Math.abs(
-        D(pts[10], pts[152]) -
-        D(pts[152], pts[175])
-      ) / M
-    );
-
-  const mid = thirds;
 
   const clar =
     100 * (1 - ASYM(pts, range(0, 233), range(234, 467)) / M);
@@ -158,14 +202,61 @@ export function computeGeometry3DScores(
       ) / M
     );
 
+  const tilt =
+    100 * (1 - Math.abs(angle(pts[33], pts[263])) / Math.PI);
+
+  /* --------------------------------------------------
+   * FIXED METRICS
+   * -------------------------------------------------- */
+
+  // Mouth proportion (so "normal" mouths don't get 0)
+  const idealMouthRatio = 0.38;
+  const mouthRatio = FACE_WIDTH > 0 ? MOUTH_WIDTH / FACE_WIDTH : 0;
+  const mouthDeviation = Math.abs(mouthRatio - idealMouthRatio) / idealMouthRatio;
+  // Soft penalty and soft floor so almost‑normal mouths stay in 40–90 range
+  const mouthRaw = 100 * (1 - mouthDeviation * 0.6);
+  const mouth = Math.max(20, Math.min(95, mouthRaw));
+
+  // Smile = lip openness. Maximum boost for good faces:
+  // - very small opening  (ratio <= 0.002) → ~55
+  // - moderate opening    (ratio ~ 0.015)  → ~88
+  // - big smile           (ratio >= 0.025) → ~98
+  const lipOpenRatio = FACE_HEIGHT > 0 ? LIP_OPEN / FACE_HEIGHT : 0;
+  const smileNorm = Math.min(Math.max((lipOpenRatio - 0.002) / 0.023, 0), 1);
+  const smile = 55 + 43 * smileNorm; // 55–98 range
+
+  // Chin projection using depth (z-axis), wider band and capped to avoid 100
+  const chinDepth = pts[152].z - pts[1].z;
+  // Map roughly [-0.035, 0.035] → [0, 1]
+  const chinNorm = (chinDepth + 0.035) / 0.07;
+  const chinRaw = 100 * Math.min(Math.max(chinNorm, 0), 1);
+  // Keep typical chins away from hard 0/100
+  const chin = Math.max(15, Math.min(90, chinRaw));
+
+  // Face thirds as ratio, not absolute difference
+  const upperFace = D(pts[10], pts[1]);
+  const lowerFace = D(pts[1], pts[152]);
+  const thirds =
+    lowerFace > 0
+      ? 100 * Math.max(
+        0,
+        1 - Math.abs(upperFace / lowerFace - 1)
+      )
+      : 0;
+
+  const mid = thirds;
+
+  /* --------------------------------------------------
+   * Aggregate
+   * -------------------------------------------------- */
+
   const values = [
     jaw,
-    lips,
+    mouth,
     smile,
     brow,
     eye,
     nose,
-    mouth,
     chin,
     tilt,
     thirds,
@@ -204,5 +295,13 @@ export function computeGeometry3DScores(
   return {
     model: cal,
     fullrating: scores
-  }
+  };
+}
+
+/**
+ * Convenience function that accepts JSON input format and computes scores
+ */
+export function computeScoresFromJSON(input: LandmarkInput | Landmark): GeometryScores {
+  const landmarks = parseLandmarks(input);
+  return computeGeometry3DScores(landmarks);
 }

@@ -5,7 +5,7 @@ import jwt from "jsonwebtoken";
 import { rateLimiter } from "./middleware/ratelimiter.js";
 import { modelRun } from "./utils/openai.client.js";
 import serverless from "serverless-http";
-import { computeGeometry3DScores } from "./utils/geometry3dScores.js";
+import { computeGeometry3DScores, computeScoresFromJSON } from "./utils/geometry3dScores.js";
 
 dotenv.config();
 
@@ -25,10 +25,10 @@ app.get("/jwt", (_, res) => {
 
 
 
-app.post("/", authMiddleware, async (req, res) => {
+app.post("/", authMiddleware , async (req, res) => {
   // const result = await modelRun(req.body.landmarks)
 
-  const result = computeGeometry3DScores(req.body.landmarks) 
+  const result = computeScoresFromJSON(req.body.landmarks) 
   res.json(result)
 }) 
 

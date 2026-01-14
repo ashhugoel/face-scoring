@@ -30,7 +30,7 @@ app.get("/jwt", (_, res) => {
 });
 app.post("/", authentication_js_1.authMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     // const result = await modelRun(req.body.landmarks)
-    const result = (0, geometry3dScores_js_1.computeGeometry3DScores)(req.body.landmarks);
+    const result = (0, geometry3dScores_js_1.computeScoresFromJSON)(req.body.landmarks);
     res.json(result);
 }));
 // export const handler = serverless(app);
