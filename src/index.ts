@@ -25,7 +25,7 @@ app.get("/jwt", (_, res) => {
 
 
 
-app.post("/", authMiddleware , async (req, res) => {
+app.post("/" ,authMiddleware, async (req, res) => {
   // const result = await modelRun(req.body.landmarks)
 
   const result = computeScoresFromJSON(req.body.landmarks) 

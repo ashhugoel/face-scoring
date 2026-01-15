@@ -175,14 +175,45 @@ export function computeGeometry3DScores(
   const clar =
     100 * (1 - ASYM(pts, range(0, 233), range(234, 467)) / M);
 
-  const puff =
-    100 * (
-      1 -
-      Math.abs(
-        D(pts[205], pts[50]) -
-        D(pts[425], pts[280])
-      ) / M
-    );
+
+
+// --- FACE LEANNESS SCORE (FINAL SOFT BOOST) ---
+
+const cheekDepth =
+  (pts[205].z + pts[425].z) / 2;
+
+const noseDepth = pts[1].z;
+const relativeCheekDepth = cheekDepth - noseDepth;
+
+const faceHeight = D(pts[10], pts[152]);
+const puffNorm = faceHeight > 0
+  ? relativeCheekDepth / faceHeight
+  : 0;
+
+// Ideal lean face puffNorm
+const IDEAL = 0.26;
+const RANGE = 0.08;
+
+// Distance from ideal
+const dist = Math.abs(puffNorm - IDEAL);
+
+// Base leanness
+let leanness01 = Math.max(
+  0,
+  1 - dist / RANGE
+);
+
+// 🔹 Slightly stronger soft bias (favor lean faces a bit more)
+let boosted01 = Math.pow(leanness01, 0.25);  // lower exponent → more mid-range lift
+
+// Slight extra offset
+boosted01 = Math.min(1, boosted01 + 0.10);  // +10% boost, capped at 1
+
+// Final score
+const puff = Math.max(45, Math.min(95, 100 * boosted01));
+
+
+
 
   const ret =
     100 * (
